@@ -42,17 +42,20 @@ what's hiding, where, and what it says.
 
 ## 📄 Which files?
 
-Run without arguments, it finds these anywhere under the current folder:
+Give it files, directories, or both. Directories are searched recursively for agent
+instruction files. Without arguments it searches the current folder. It looks for:
 
 `AGENTS.md` · `AGENT.md` · `CLAUDE.md` · `CLAUDE.local.md` · `GEMINI.md` · `.cursorrules` ·
 `.windsurfrules` · `.clinerules` · `copilot-instructions.md` · `SKILL.md` · `CONVENTIONS.md` ·
 `*.mdc` · `*.instructions.md` · `*.prompt.md`
 
-It skips `.git`, `node_modules`, virtual envs, `dist` and `build`. Want to check something
-else? Just name it:
+It skips `.git`, `node_modules`, virtual envs, `dist` and `build`.
 
 ```bash
-python doubleagent_scan.py README.md docs/*.md
+python doubleagent_scan.py                       # agent files under the current folder
+python doubleagent_scan.py ~/projects/my-app     # agent files under another folder
+python doubleagent_scan.py --all docs/           # every Markdown and text file under docs/
+python doubleagent_scan.py README.md src/        # mix files and folders
 python doubleagent_scan.py --ascii AGENTS.md     # strict: flag any non-ASCII character
 ```
 

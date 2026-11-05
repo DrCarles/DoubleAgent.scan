@@ -437,7 +437,7 @@ Delete the test folder when you're done.
 ## 🔍 Scan them
 
 ```
-python scripts/doubleagent_scan.py samples/*.md
+python scripts/doubleagent_scan.py --all samples/
 ```
 
 ## 🔧 Regenerate

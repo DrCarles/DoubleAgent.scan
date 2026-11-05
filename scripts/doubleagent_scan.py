@@ -4,7 +4,9 @@ but AI agents can read.
 
 Usage:
     python scripts/doubleagent_scan.py              # scan known agent files under the current directory
-    python scripts/doubleagent_scan.py FILE [...]   # scan the given files
+    python scripts/doubleagent_scan.py DIR [...]    # scan known agent files under the given directories
+    python scripts/doubleagent_scan.py FILE [...]   # scan the given files (files and directories can mix)
+    python scripts/doubleagent_scan.py --all DIR    # scan every Markdown and text file under DIR
     python scripts/doubleagent_scan.py --ascii ...  # also flag every non-ASCII character
 
 Exit code: 0 = clean, 1 = findings, 2 = usage or read error.
@@ -23,6 +25,7 @@ AGENT_FILE_NAMES = {
     "skill.md", "conventions.md",
 }
 AGENT_FILE_SUFFIXES = (".mdc", ".instructions.md", ".prompt.md")
+TEXT_SUFFIXES = (".md", ".markdown", ".mdc", ".mdx", ".txt", ".rst")  # for --all
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 
 LONG_LINE = 1000  # characters; text past this is often off-screen in editors and diff views
@@ -278,13 +281,36 @@ def scan_markup(text, rep):
         rep.add(cl, cc, "HIGH", "unclosed HTML comment hides the rest of the file")
 
 
-def find_agent_files(root):
+def find_agent_files(root, include_all=False):
+    """Agent instruction files under root (with include_all: every Markdown/text file)."""
+    found = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        for name in filenames:
+        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        for name in sorted(filenames):
             low = name.lower()
-            if low in AGENT_FILE_NAMES or low.endswith(AGENT_FILE_SUFFIXES):
-                yield os.path.join(dirpath, name)
+            if (low in AGENT_FILE_NAMES or low.endswith(AGENT_FILE_SUFFIXES)
+                    or (include_all and low.endswith(TEXT_SUFFIXES))):
+                found.append(os.path.join(dirpath, name))
+    return found
+
+
+def collect_targets(paths, include_all):
+    """Expand directories into the files to scan. Returns (files, errors)."""
+    files, errors = [], 0
+    for path in paths:
+        if os.path.isdir(path):
+            matches = find_agent_files(path, include_all)
+            if not matches:
+                hint = "" if include_all else " (use --all to scan every Markdown and text file)"
+                print(f"{path}: no agent instruction files found{hint}")
+            files.extend(matches)
+        elif os.path.isfile(path):
+            files.append(path)
+        else:
+            print(f"{path}: ERROR: no such file or directory", file=sys.stderr)
+            errors += 1
+    unique = list(dict.fromkeys(os.path.normpath(f) for f in files))
+    return unique, errors
 
 
 def scan_file(path, ascii_only):
@@ -311,18 +337,23 @@ def main():
         prog="doubleagent_scan.py",
         description="DoubleAgent.scan: find content in agent instruction files that "
                     "humans can't see but AI agents can read.")
-    ap.add_argument("files", nargs="*", help="files to scan (default: agent files under .)")
+    ap.add_argument("paths", nargs="*", metavar="PATH",
+                    help="files or directories to scan (default: the current directory). "
+                         "Directories are searched recursively for agent instruction files.")
+    ap.add_argument("--all", action="store_true",
+                    help="in directories, scan every Markdown and text file, not only agent files")
     ap.add_argument("--ascii", action="store_true",
                     help="flag every non-ASCII character (recommended for AGENTS.md)")
     args = ap.parse_args()
 
-    files = args.files or sorted(find_agent_files("."))
+    paths = args.paths or ["."]
+    files, errors = collect_targets(paths, args.all)
     if not files:
-        print("No agent instruction files found.")
-        return 0
+        if not errors and not any(os.path.isdir(p) for p in paths):
+            print("No files to scan.")
+        return 2 if errors else 0
 
     found = 0
-    errors = 0
     for path in files:
         rep = scan_file(path, args.ascii)
         if rep is None:
